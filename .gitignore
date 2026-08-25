@@ -1,8 +1,9 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -20,42 +21,45 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
-venv/
-env/
-ENV/
-.venv/
+# Virtual environments
 .env
+.venv/
+env/
+venv/
+ENV/
 
-# IDE
-.vscode/
+# IDE files
 .idea/
+.vscode/
 *.swp
 *.swo
 *~
+.vscode/
+
+# Model artifacts
+models/artifacts/*.pkl
+models/artifacts/*.joblib
+
+# Data files
+data/*.csv
+
+# Logs
+*.log
 
 # Jupyter
 .ipynb_checkpoints/
 
-# Model artifacts
-models/artifacts/
-*.pkl
-*.joblib
-*.h5
-*.pt
+# Coverage reports
+.coverage
+htmlcov/
+.coverage.*
+coverage.xml
 
-# Data
-data/*.csv
-data/*.parquet
-!data/schema.py
-!data/generate.py
-!data/drift.py
-!data/__init__.py
+# pytest
+.pytest_cache/
 
-# Logs
-logs/
-*.log
+# mypy
+.mypy_cache/
 
-# OS
-.DS_Store
-Thumbs.db
+# ruff
+.ruff_cache/
