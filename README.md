@@ -90,8 +90,7 @@ ai-risk-manager/
 ├── api/
 │   ├── __init__.py
 │   ├── main.py               # FastAPI app
-│   ├── schemas.py            # Request/response models
-│   └── endpoints.py          # Route handlers
+│   └── schemas.py            # Request/response models
 ├── tests/
 │   ├── __init__.py
 │   ├── test_data.py
@@ -119,7 +118,7 @@ ai-risk-manager/
 ### Installation
 
 ```bash
-git clone https://github.com/your-username/ai-risk-manager.git
+git clone https://github.com/Daksh1308-AI-ML/AI-Risk-Manager.git
 cd ai-risk-manager
 pip install -r requirements.txt
 ```
@@ -142,7 +141,7 @@ python -m models.stage2_fraud_classifier --data data/transactions.csv
 ```bash
 python -m api.main
 # or
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 ### Run Evaluation
@@ -353,7 +352,7 @@ pytest tests/ -v
 | 2. Models | models/cost_matrix.py, models/feature_engine.py, models/stage1_risk_scorer.py, models/stage2_fraud_classifier.py |
 | 3. Drift | data/drift.py, models/drift_detector.py, models/adaptive_trainer.py |
 | 4. Evaluation | evaluation/metrics.py, evaluation/cost_analysis.py, evaluation/heldout_test.py, evaluation/drift_report.py |
-| 5. API | api/schemas.py, api/endpoints.py, api/main.py |
+| 5. API | api/schemas.py, api/main.py |
 | 6. Tests | tests/test_data.py, tests/test_models.py, tests/test_api.py |
 
 ## License
