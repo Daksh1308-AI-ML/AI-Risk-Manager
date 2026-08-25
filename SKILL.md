@@ -1,4 +1,4 @@
-# SKILL.md — AI Risk Manager Implementation Guide
+# SKILL.md — Trishul Implementation Guide
 
 > **PURPOSE:** This file is the SINGLE SOURCE OF TRUTH for implementation.
 > **RULE:** When in doubt, CHECK THIS FILE. Do NOT invent new requirements.

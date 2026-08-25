@@ -49,7 +49,7 @@ class TransactionSchema(BaseModel):
     """Schema for a single payment transaction record.
 
     Used for data validation, feature engineering, and model training
-    within the AI Risk Manager chargeback prediction pipeline.
+    within the Trishul chargeback prediction pipeline.
     """
 
     transaction_id: str = Field(..., description="Unique UUID identifying the transaction")

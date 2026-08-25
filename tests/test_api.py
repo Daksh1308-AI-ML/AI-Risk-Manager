@@ -1,4 +1,4 @@
-"""API integration tests for the AI Risk Manager FastAPI application.
+"""API integration tests for the Trishul FastAPI application.
 
 Uses httpx.AsyncClient with ASGITransport to test every endpoint
 against the real FastAPI app (with model fallbacks when no trained

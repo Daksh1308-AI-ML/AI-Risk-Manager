@@ -1,4 +1,4 @@
-"""Held-out test evaluation module for AI Risk Manager.
+"""Held-out test evaluation module for Trishul.
 
 Runs a full 80/20 train/test split evaluation pipeline, trains both
 Stage 1 and Stage 2 models on the training set, evaluates on the held-out
@@ -110,7 +110,7 @@ class HeldOutEvaluator:
             All evaluation results.
         """
         print("=" * 60)
-        print("AI Risk Manager — Held-Out Test Evaluation")
+        print("Trishul — Held-Out Test Evaluation")
         print("=" * 60)
 
         # --- 1. Load data ---
@@ -268,7 +268,7 @@ class HeldOutEvaluator:
         strategies = results["stage1_threshold_strategies"]
 
         lines: list[str] = []
-        lines.append("=== AI Risk Manager - Evaluation Report ===")
+        lines.append("=== Trishul - Evaluation Report ===")
         lines.append(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append("")
 

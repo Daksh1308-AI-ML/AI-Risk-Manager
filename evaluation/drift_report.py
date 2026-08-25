@@ -1,4 +1,4 @@
-"""Drift impact report generator for AI Risk Manager.
+"""Drift impact report generator for Trishul.
 
 Compares static vs adaptive model performance across 12 months of
 concept-drift data and produces visualisations and a text summary.
@@ -334,7 +334,7 @@ class DriftReportGenerator:
         sep = "=" * 72
 
         lines.append(sep)
-        lines.append("  DRIFT IMPACT REPORT — AI Risk Manager")
+        lines.append("  DRIFT IMPACT REPORT — Trishul")
         lines.append(sep)
         lines.append("")
 

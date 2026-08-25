@@ -1,4 +1,4 @@
-# Implementation Plan — AI Risk Manager
+# Implementation Plan — Trishul
 
 ## Overview
 

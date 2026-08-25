@@ -1,4 +1,4 @@
-# System Architecture — AI Risk Manager
+# System Architecture — Trishul
 
 ## High-Level Architecture
 

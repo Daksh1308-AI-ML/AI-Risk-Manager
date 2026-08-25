@@ -1,10 +1,10 @@
-# AI Risk Manager
+# Trishul
 
-> Chargeback Evidence Auto-Responder for Indian BFSI
+> Triple Threat Chargeback Defense for Indian BFSI
 
 ## Overview
 
-Triple Threat Chargeback Defense System:
+Trishul is a cost-aware chargeback defense system with three pillars:
 
 1. **Cost-Sensitive Learning** with real RBI cost matrix
 2. **Concept Drift Detection** with adaptive retraining

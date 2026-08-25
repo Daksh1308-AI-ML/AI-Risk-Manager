@@ -1,4 +1,4 @@
-"""FastAPI application for AI Risk Manager.
+"""FastAPI application for Trishul.
 
 Exposes endpoints for risk scoring, fraud classification, drift detection,
 and model evaluation.  Models are loaded on startup via the lifespan handler;
@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="AI Risk Manager",
+    title="Trishul",
     description="Chargeback Evidence Auto-Responder for Indian BFSI",
     version="1.0.0",
     lifespan=lifespan,

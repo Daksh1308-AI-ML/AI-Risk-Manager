@@ -1,4 +1,4 @@
-# TODO — AI Risk Manager
+# TODO — Trishul
 
 ## Status Legend
 - [ ] Pending

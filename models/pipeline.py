@@ -1,4 +1,4 @@
-"""Unified inference pipeline for AI Risk Manager.
+"""Unified inference pipeline for Trishul.
 
 Combines Stage 1 (XGBoost risk scoring) and Stage 2 (Random Forest fraud
 type classification) into a single ``RiskManager`` class that accepts raw
@@ -292,7 +292,7 @@ if __name__ == "__main__":
     )
 
     print("=" * 60)
-    print("AI Risk Manager — Unified Inference Pipeline Demo")
+    print("Trishul — Unified Inference Pipeline Demo")
     print("=" * 60)
 
     # 1. Load pipeline

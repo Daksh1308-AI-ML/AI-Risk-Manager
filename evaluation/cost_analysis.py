@@ -256,7 +256,7 @@ class EvaluationCostAnalyzer:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("AI Risk Manager - Cost Analysis Module")
+    print("Trishul - Cost Analysis Module")
     print("=" * 60)
 
     data_path = "data/transactions.csv"
