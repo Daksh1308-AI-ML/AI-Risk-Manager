@@ -6,22 +6,22 @@
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          CLIENT LAYER                                   │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │
-│  │  Merchant    │  │  Razorpay   │  │  Dashboard  │  │  CLI        │   │
-│  │  Dashboard   │  │  Dashboard  │  │  (Grafana)  │  │  Tool       │   │
+│  │  Merchant    │  │  Razorpay   │  │  Jupyter    │  │  CLI        │   │
+│  │  Dashboard   │  │  Dashboard  │  │  Notebooks  │  │  Tool       │   │
 │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘   │
 │         │                │                │                │            │
 └─────────┼────────────────┼────────────────┼────────────────┼────────────┘
           │                │                │                │
           ▼                ▼                ▼                ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         API GATEWAY (FastAPI)                           │
+│                    API GATEWAY (FastAPI)                                │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
 │  │  /api/v1/score  │  /api/v1/classify  │  /api/v1/drift/status   │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                              │                                          │
 │                              ▼                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  Rate Limiter │ Auth │ Request Validation │ Logging │ Tracing  │   │
+│  │  Request Validation (Pydantic) │ Logging │ CORS               │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────┬──────────────────────────────────────┘
                                    │
@@ -55,9 +55,9 @@
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         DATA LAYER                                      │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐         │
-│  │  Model          │  │  Feature        │  │  Audit          │         │
-│  │  Registry       │  │  Store          │  │  Log            │         │
-│  │  (MLflow)       │  │  (Redis)        │  │  (PostgreSQL)   │         │
+│  │  Schema         │  │  Drift          │  │  Audit          │         │
+│  │  Definitions    │  │  Simulator      │  │  Logging        │         │
+│  │  (data/schema)  │  │  (data/drift)   │  │  (structured)   │         │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -68,7 +68,58 @@
 
 ### 1. Data Layer
 
-#### 1.1 Synthetic Data Generator (`data/generate.py`)
+#### 1.1 Data Schema (`data/schema.py`)
+
+Defines all Pydantic models and enums for the system:
+
+```python
+# Enums
+class PaymentMethod(str, Enum):
+    UPI = "upi"
+    CREDIT_CARD = "credit_card"
+    DEBIT_CARD = "debit_card"
+    NETBANKING = "netbanking"
+    WALLET = "wallet"
+
+class MerchantCategory(str, Enum):
+    ELECTRONICS = "electronics"
+    GROCERY = "grocery"
+    FASHION = "fashion"
+    TRAVEL = "travel"
+    DIGITAL_SERVICES = "digital_services"
+
+class FraudType(str, Enum):
+    GENUINE = "genuine"
+    FRIENDLY_FRAUD = "friendly_fraud"
+    ACCOUNT_TAKEOVER = "account_takeover"
+    TECHNICAL_FAILURE = "technical_failure"
+
+class ChargebackReason(str, Enum):
+    NOT_RECEIVED = "not_received"
+    DEFECTIVE = "defective"
+    UNAUTHORIZED = "unauthorized"
+    DUPLICATE = "duplicate"
+
+# Transaction Schema
+class Transaction(BaseModel):
+    transaction_id: str          # UUID
+    timestamp: datetime          # ISO format
+    amount: float                # INR, range 100-500000
+    payment_method: PaymentMethod
+    merchant_category: MerchantCategory
+    customer_id: str             # Anonymized string
+    device_fingerprint: str      # Hash string
+    ip_address: str              # IPv4 string
+    is_new_device: bool
+    is_new_address: bool
+    account_age_days: int
+    past_disputes: int           # Count
+    chargeback_label: bool       # TARGET
+    fraud_type: FraudType
+    chargeback_reason: ChargebackReason
+```
+
+#### 1.2 Synthetic Data Generator (`data/generate.py`)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -83,11 +134,11 @@
 │         │                  │                  │                  │
 │         ▼                  ▼                  ▼                  │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Distribution:                                          │   │
-│  │  - Genuine Fraud: 25%                                   │   │
-│  │  - Friendly Fraud: 60%                                  │   │
-│  │  - Account Takeover: 10%                                │   │
-│  │  - Technical Failure: 5%                                │   │
+│  │  Distribution (EXACT):                                   │   │
+│  │  ├── genuine: 25%                                       │   │
+│  │  ├── friendly_fraud: 60%                                │   │
+│  │  ├── account_takeover: 10%                              │   │
+│  │  └── technical_failure: 5%                              │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                              │                                  │
 │                              ▼                                  │
@@ -97,27 +148,13 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Schema:**
-```python
-TransactionSchema:
-  - transaction_id: str (UUID)
-  - timestamp: datetime
-  - amount: float (INR)
-  - payment_method: PaymentMethod
-  - merchant_category: MerchantCategory
-  - customer_id: str
-  - device_fingerprint: str
-  - ip_address: str
-  - is_new_device: bool
-  - is_new_address: bool
-  - account_age_days: int
-  - past_disputes: int
-  - chargeback_label: bool
-  - fraud_type: FraudType
-  - chargeback_reason: ChargebackReason
-```
+**Realistic Indian Patterns:**
+- UPI amounts: ₹100 – ₹1,00,000 (common: ₹500, ₹1000, ₹2000, ₹5000)
+- Credit card amounts: ₹1,000 – ₹5,00,000
+- Peak hours: 10am-2pm, 7pm-11pm
+- Device types: Android (80%), iOS (15%), Desktop (5%)
 
-#### 1.2 Drift Simulator (`data/drift.py`)
+#### 1.3 Drift Simulator (`data/drift.py`)
 
 ```
 Time Series Drift Simulation:
@@ -126,13 +163,13 @@ Time Series Drift Simulation:
 │  └─ Fraud rate: 2%, normal distribution
 │
 ├─ Month 4-6: Seasonal Shift (Diwali)
-│  └─ Fraud rate: 8%, amount skew
+│  └─ Fraud rate: 8%, amount skew, more electronics category
 │
 ├─ Month 7-9: Adversarial Shift
-│  └─ Fraud rate: 5%, new patterns
+│  └─ Fraud rate: 5%, new patterns, device fingerprinting bypass
 │
 └─ Month 10-12: Partial Recovery
-   └─ Fraud rate: 3%, mixed patterns
+   └─ Fraud rate: 3%, mixed patterns (old + new)
 ```
 
 ---
@@ -145,21 +182,28 @@ Time Series Drift Simulation:
 Cost Structure (RBI-Aligned):
 ┌─────────────────────────────────────────────────────────────────┐
 │  FALSE NEGATIVE (Missed Fraud)                                  │
-│  ├── Chargeback Amount: ₹1,000 - ₹5,00,000                     │
-│  ├── Processing Fee: ₹500                                       │
-│  ├── Operational Cost: ₹200                                     │
-│  ├── Churn Cost: 5% of Customer LTV                             │
-│  └── RBI Penalty Risk: 2%                                       │
+│  ├── chargeback_amount_multiplier: 1.0 (full amount)           │
+│  ├── processing_fee: ₹500                                       │
+│  ├── operational_cost: ₹200                                     │
+│  ├── churn_probability: 5%                                      │
+│  ├── churn_ltv_cost: ₹2,000                                     │
+│  ├── rbi_penalty_probability: 2%                                │
+│  └── rbi_penalty_amount: ₹5,000                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │  FALSE POSITIVE (Legitimate Blocked)                            │
-│  ├── Lost Sale: 70% probability                                 │
-│  ├── Manual Review: ₹150                                        │
-│  ├── Customer Friction: 3% churn                                │
-│  └── Investigation Time: 30 min                                 │
+│  ├── lost_sale_probability: 70%                                 │
+│  ├── manual_review_cost: ₹150                                   │
+│  ├── churn_probability: 3%                                      │
+│  ├── churn_ltv_cost: ₹2,000                                     │
+│  ├── investigation_time_minutes: 30                             │
+│  └── hourly_rate: ₹500                                          │
 ├─────────────────────────────────────────────────────────────────┤
 │  TRUE POSITIVE (Fraud Caught)                                   │
-│  ├── Prevention: Full amount saved                              │
-│  └── Verification: ₹100                                         │
+│  ├── verification_cost: ₹100                                    │
+│  └── prevention_benefit: 1.0 (full amount saved)               │
+├─────────────────────────────────────────────────────────────────┤
+│  TRUE NEGATIVE (Legit Allowed)                                  │
+│  └── cost: ₹0                                                   │
 ├─────────────────────────────────────────────────────────────────┤
 │  RBI THRESHOLDS                                                 │
 │  ├── Zero Liability: ₹50,000                                   │
@@ -171,36 +215,39 @@ Cost Structure (RBI-Aligned):
 #### 2.2 Feature Engineering (`models/feature_engine.py`)
 
 ```
-Feature Categories:
+Feature Categories (EXACT 20 features):
 ┌─────────────────────────────────────────────────────────────────┐
-│  VELOCITY FEATURES                                              │
+│  VELOCITY FEATURES (5)                                          │
 │  ├── txn_count_1h: Transactions in last hour                   │
 │  ├── txn_count_24h: Transactions in last 24 hours              │
 │  ├── txn_count_7d: Transactions in last 7 days                 │
 │  ├── amount_sum_24h: Total amount in last 24h                  │
 │  └── avg_amount_diff: Deviation from customer average           │
 ├─────────────────────────────────────────────────────────────────┤
-│  DEVICE FEATURES                                                │
+│  DEVICE FEATURES (3)                                            │
 │  ├── device_trust_score: Historical success rate               │
 │  ├── is_new_device: First time device                           │
 │  └── device_age_days: Days since first seen                     │
 ├─────────────────────────────────────────────────────────────────┤
-│  GEOGRAPHIC FEATURES                                            │
+│  GEOGRAPHIC FEATURES (3)                                        │
 │  ├── geo_velocity: Distance/time from last transaction          │
 │  ├── is_new_address: Shipping to new address                    │
 │  └── ip_country_match: IP vs. billing country                   │
 ├─────────────────────────────────────────────────────────────────┤
-│  ACCOUNT FEATURES                                               │
+│  ACCOUNT FEATURES (4)                                           │
 │  ├── account_age_days: Days since creation                      │
 │  ├── past_disputes: Historical dispute count                    │
 │  ├── dispute_rate: disputes / total_orders                      │
 │  └── account_activity: Transactions per week                    │
 ├─────────────────────────────────────────────────────────────────┤
-│  TEMPORAL FEATURES                                              │
+│  TEMPORAL FEATURES (4)                                          │
 │  ├── hour_of_day: Transaction hour (0-23)                       │
 │  ├── day_of_week: Transaction day (0-6)                         │
 │  ├── is_weekend: Weekend flag                                   │
 │  └── is_night: Night transaction (10pm-6am)                     │
+├─────────────────────────────────────────────────────────────────┤
+│  AMOUNT FEATURES (1)                                            │
+│  └── amount_percentile: Rank within merchant category           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -211,7 +258,7 @@ Feature Categories:
 │                    STAGE 1: RISK SCORER                          │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  Input: Transaction Features (20+ dimensions)                    │
+│  Input: Transaction Features (20 dimensions)                     │
 │                              │                                   │
 │                              ▼                                   │
 │  ┌─────────────────────────────────────────────────────────┐   │
@@ -219,8 +266,9 @@ Feature Categories:
 │  │  ├── n_estimators: 200                                  │   │
 │  │  ├── max_depth: 8                                       │   │
 │  │  ├── learning_rate: 0.1                                 │   │
-│  │  ├── scale_pos_weight: calculated                       │   │
-│  │  └── eval_metric: aucpr                                 │   │
+│  │  ├── scale_pos_weight: calculated (neg/pos ratio)       │   │
+│  │  ├── eval_metric: aucpr                                 │   │
+│  │  └── random_state: 42                                   │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                              │                                   │
 │                              ▼                                   │
@@ -231,9 +279,9 @@ Feature Categories:
 │                              ▼                                   │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  Threshold Optimization:                                │   │
-│  │  ├── Default: 0.5                                       │   │
-│  │  ├── Cost-Optimized: 0.35 (minimize total cost)         │   │
-│  │  └── F1-Optimized: 0.65 (maximize F1)                   │   │
+│  │  ├── default: 0.5                                       │   │
+│  │  ├── cost_optimized: 0.35 (minimize total cost)         │   │
+│  │  └── f1_optimized: 0.65 (maximize F1)                   │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -246,11 +294,11 @@ Feature Categories:
 │                 STAGE 2: FRAUD TYPE CLASSIFIER                   │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  Input: Stage 1 Features + Behavioral Signals                    │
-│  ├── Login after purchase: bool                                 │
-│  ├── Support contact: bool                                      │
-│  ├── Return request: bool                                       │
-│  └── Account activity level: int                                │
+│  Input: Stage 1 Features + Score + Behavioral Signals            │
+│  ├── login_after_purchase: bool                                 │
+│  ├── support_contacted: bool                                    │
+│  ├── return_requested: bool                                     │
+│  └── account_activity_level: str (low/medium/high)              │
 │                              │                                   │
 │                              ▼                                   │
 │  ┌─────────────────────────────────────────────────────────┐   │
@@ -258,16 +306,26 @@ Feature Categories:
 │  │  ├── n_estimators: 150                                  │   │
 │  │  ├── max_depth: 12                                      │   │
 │  │  ├── min_samples_split: 5                               │   │
-│  │  └── class_weight: balanced                             │   │
+│  │  ├── min_samples_leaf: 2                                │   │
+│  │  ├── class_weight: balanced                             │   │
+│  │  └── random_state: 42                                   │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                              │                                   │
 │                              ▼                                   │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  Output: Fraud Type + Confidence                         │   │
-│  │  ├── genuine_fraud: Stolen card, unauthorized           │   │
-│  │  ├── friendly_fraud: Legit buyer abusing                │   │
-│  │  ├── account_takeover: Compromised account              │   │
-│  │  └── technical_failure: System error                    │   │
+│  │  ├── genuine: Stolen card, unauthorized                  │   │
+│  │  ├── friendly_fraud: Legit buyer abusing                 │   │
+│  │  ├── account_takeover: Compromised account               │   │
+│  │  └── technical_failure: System error                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Evidence Checklists (per fraud type):                   │   │
+│  │  ├── genuine: delivery proof, IP logs, device match     │   │
+│  │  ├── friendly_fraud: POD, login history, return policy  │   │
+│  │  ├── account_takeover: password reset, device change    │   │
+│  │  └── technical_failure: error logs, duplicate proof     │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -296,10 +354,10 @@ Feature Categories:
 │                          │                                       │
 │                          ▼                                       │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │              ADAPTIVE TRAINER                            │   │
+│  │              ADAPTIVE TRAINER (models/adaptive_trainer)  │   │
 │  │  ├── Incremental learning with new data                 │   │
 │  │  ├── A/B testing: static vs. adaptive                   │   │
-│  │  └── Model versioning with MLflow                       │   │
+│  │  └── Model versioning with experiment tracking          │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -319,26 +377,22 @@ Feature Categories:
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  Middleware Stack                                        │   │
 │  │  ├── CORS                                               │   │
-│  │  ├── Rate Limiter (100 req/min)                         │   │
-│  │  ├── Request Validation (Pydantic)                      │   │
-│  │  ├── Authentication (API Key)                           │   │
+│  │  ├── Request Validation (Pydantic v2)                   │   │
 │  │  ├── Logging (Structured JSON)                          │   │
-│  │  └── Tracing (OpenTelemetry)                            │   │
+│  │  └── OpenAPI/Swagger Documentation                      │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                              │                                   │
 │                              ▼                                   │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Endpoints                                              │   │
+│  │  Endpoints (api/endpoints.py)                           │   │
 │  │  ├── POST /api/v1/score                                 │   │
-│  │  │   └─ Input: Transaction → Output: Risk Score + Cost  │   │
+│  │  │   └─ Input: ScoreRequest → Output: ScoreResponse     │   │
 │  │  ├── POST /api/v1/classify                              │   │
-│  │  │   └─ Input: Transaction → Output: Fraud Type         │   │
-│  │  ├── POST /api/v1/evaluate                              │   │
-│  │  │   └─ Input: Dataset → Output: Evaluation Report      │   │
+│  │  │   └─ Input: ClassifyRequest → Output: ClassifyResp.  │   │
 │  │  ├── GET /api/v1/drift/status                           │   │
-│  │  │   └─ Output: Drift Detector Status                   │   │
-│  │  └── POST /api/v1/drift/simulate                        │   │
-│  │      └─ Input: Scenario → Output: Drift Report          │   │
+│  │  │   └─ Output: DriftStatusResponse                     │   │
+│  │  └── POST /api/v1/evaluate                              │   │
+│  │      └─ Input: EvaluateRequest → Output: EvalResponse   │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -348,29 +402,58 @@ Feature Categories:
 
 ```python
 # Request Schema
-ScoreRequest:
-  amount: float
-  payment_method: PaymentMethod
-  merchant_category: MerchantCategory
-  is_new_device: bool
-  is_new_address: bool
-  account_age_days: int
-  past_disputes: int
+class ScoreRequest(BaseModel):
+    amount: float
+    payment_method: PaymentMethod
+    merchant_category: MerchantCategory
+    is_new_device: bool
+    is_new_address: bool
+    account_age_days: int
+    past_disputes: int
 
 # Response Schema
-ScoreResponse:
-  risk_score: float (0.0 - 1.0)
-  recommended_action: str (ALLOW / REVIEW / BLOCK)
-  estimated_cost_if_fraud: float (₹)
-  cost_matrix: CostBreakdown
-  explanation: List[FeatureContribution]
+class ScoreResponse(BaseModel):
+    risk_score: float                # 0.0 - 1.0
+    recommended_action: str          # ALLOW / REVIEW / BLOCK_AND_REVIEW
+    estimated_cost_if_fraud: float   # INR
+    threshold_used: float
+    explanation: List[FeatureContribution]
+
+# Classification Request
+class ClassifyRequest(BaseModel):
+    transaction: ScoreRequest
+    login_after_purchase: bool
+    support_contacted: bool
+    return_requested: bool
+    account_activity_level: str      # low / medium / high
 
 # Classification Response
-ClassifyResponse:
-  fraud_type: FraudType
-  confidence: float
-  evidence_checklist: List[str]
-  recommended_evidence: List[Document]
+class ClassifyResponse(BaseModel):
+    fraud_type: FraudType
+    confidence: float
+    evidence_checklist: List[str]
+
+# Drift Status Response
+class DriftStatusResponse(BaseModel):
+    adwin_status: str
+    psi_value: float
+    page_hinkley_value: float
+    drift_detected: bool
+    last_retrained: datetime
+
+# Evaluation Request
+class EvaluateRequest(BaseModel):
+    test_data_path: str
+    threshold_mode: str              # cost_optimized / f1_optimized / default
+
+# Evaluation Response
+class EvaluateResponse(BaseModel):
+    precision: float
+    recall: float
+    f1_score: float
+    auc_roc: float
+    total_cost_savings: float
+    cost_savings_percentage: float
 ```
 
 ---
@@ -395,11 +478,19 @@ ClassifyResponse:
 │                              │                                   │
 │                              ▼                                   │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Cost Analysis                                           │   │
+│  │  Cost Analysis (evaluation/cost_analysis.py)             │   │
 │  │  ├── Total Cost = (FN × FN_cost) + (FP × FP_cost)       │   │
 │  │  ├── Cost Savings vs. No Model                          │   │
 │  │  ├── Cost Savings vs. F1-Optimized                      │   │
 │  │  └── ROI = (Cost Prevented) / (Model Cost)              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              │                                   │
+│                              ▼                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Held-Out Testing (evaluation/heldout_test.py)           │   │
+│  │  ├── Train/hold-out split                               │   │
+│  │  ├── Cross-validation                                  │   │
+│  │  └── Statistical significance                          │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                              │                                   │
 │                              ▼                                   │
@@ -414,6 +505,18 @@ ClassifyResponse:
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**Evaluation Targets:**
+
+| Metric | Target | Minimum |
+|--------|--------|---------|
+| Precision | > 85% | 80% |
+| Recall | > 80% | 75% |
+| F1-Score | > 0.82 | 0.78 |
+| AUC-ROC | > 0.90 | 0.85 |
+| Cost Savings | > 70% | 60% |
+| API Response | < 100ms | 200ms |
+| Test Coverage | > 80% | 70% |
 
 #### 4.2 Drift Report (`evaluation/drift_report.py`)
 
@@ -451,7 +554,8 @@ Drift Impact Visualization:
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │  Transaction│────▶│  Feature    │────▶│  Stage 1    │────▶│  Threshold  │
 │  Request    │     │  Engine     │     │  Risk       │     │  Optimizer  │
-└─────────────┘     └─────────────┘     │  Scorer     │     └──────┬──────┘
+│  (API)      │     │  (20 feat.) │     │  Scorer     │     └──────┬──────┘
+└─────────────┘     └─────────────┘     │  (XGBoost)  │            │
                                         └─────────────┘            │
                                                                    ▼
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -467,7 +571,8 @@ Drift Impact Visualization:
 │  Transaction│────▶│  Stage 1    │────▶│  Stage 2    │
 │  + Stage 1  │     │  Features   │     │  Fraud      │
 │  Features   │     │  + Score    │     │  Classifier │
-└─────────────┘     └─────────────┘     └──────┬──────┘
+└─────────────┘     └─────────────┘     │  (RF)       │
+                                        └──────┬──────┘
                                                │
                                                ▼
                                         ┌─────────────┐
@@ -488,37 +593,63 @@ Drift Impact Visualization:
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │  New        │────▶│  Drift      │────▶│  Alert      │
 │  Transactions│    │  Detectors  │     │  Manager    │
-└─────────────┘     └─────────────┘     └──────┬──────┘
+└─────────────┘     │  (ADWIN,    │     └──────┬──────┘
+                    │   PSI,      │            │
+                    │   PH)       │            ▼
+                    └─────────────┘     ┌─────────────┐
+                                        │  Adaptive   │
+                                        │  Trainer    │
+                                        └──────┬──────┘
                                                │
-                              ┌─────────────────┼─────────────────┐
-                              ▼                 ▼                 ▼
-                       ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-                       │  Drift      │  │  Retraining │  │  A/B        │
-                       │  Logged     │  │  Triggered  │  │  Comparison │
-                       └─────────────┘  └─────────────┘  └─────────────┘
+                               ┌────────────────┼─────────────────┐
+                               ▼                 ▼                 ▼
+                        ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+                        │  Drift      │  │  Retraining │  │  A/B        │
+                        │  Logged     │  │  Triggered  │  │  Comparison │
+                        └─────────────┘  └─────────────┘  └─────────────┘
+```
+
+#### 5.4 Notebook Workflows
+
+```
+notebooks/
+├── 01_data_exploration.ipynb
+│   └── Data profiling, distribution analysis, fraud pattern visualization
+│
+├── 02_model_training.ipynb
+│   └── Feature engineering, model training, threshold tuning, evaluation
+│
+└── 03_drift_analysis.ipynb
+    └── Drift simulation, detector comparison, adaptive retraining demo
 ```
 
 ---
 
 ### 6. Technology Stack
 
-| Layer | Component | Technology |
-|-------|-----------|------------|
-| **Data** | Generation | Faker, NumPy, Pandas |
-| **Data** | Storage | CSV (local), PostgreSQL (prod) |
-| **Model** | ML | XGBoost, Scikit-learn, Pandas |
-| **Model** | Drift | River, Alibi-detect |
-| **Model** | Tracking | MLflow |
-| **API** | Framework | FastAPI, Uvicorn |
-| **API** | Validation | Pydantic |
-| **API** | Auth | API Key, JWT |
-| **API** | Docs | OpenAPI/Swagger |
-| **Eval** | Metrics | Scikit-learn, NumPy |
-| **Eval** | Viz | Matplotlib, Seaborn, Plotly |
-| **Test** | Unit | Pytest |
-| **Test** | Integration | Pytest-asyncio, Httpx |
-| **Infra** | Container | Docker |
-| **Infra** | CI/CD | GitHub Actions |
+| Layer | Component | Technology | Version |
+|-------|-----------|------------|---------|
+| **Data** | Language | Python | 3.10+ |
+| **Data** | Generation | Faker | 19.0+ |
+| **Data** | Manipulation | Pandas | 2.0+ |
+| **Data** | Numerical | NumPy | 1.24+ |
+| **Data** | Storage | CSV (local) | — |
+| **Model** | Gradient Boosting | XGBoost | 2.0+ |
+| **Model** | ML Utilities | Scikit-learn | 1.3+ |
+| **Model** | Drift Detection | River | 0.21+ |
+| **Model** | Tracking | MLflow | — |
+| **API** | Framework | FastAPI | 0.100+ |
+| **API** | Server | Uvicorn | 0.23+ |
+| **API** | Validation | Pydantic | 2.0+ |
+| **API** | Testing | HTTPX | 0.24+ |
+| **Eval** | Metrics | Scikit-learn | 1.3+ |
+| **Eval** | Visualization | Matplotlib | 3.7+ |
+| **Eval** | Visualization | Seaborn | 0.12+ |
+| **Test** | Unit/Integration | Pytest | 7.0+ |
+| **Test** | Async Testing | Pytest-asyncio | — |
+| **Notebook** | Interactive | Jupyter | — |
+
+**NOT USED:** TensorFlow, PyTorch, Keras, ONNX, Docker, Kubernetes, PostgreSQL (kept simple per SKILL.md)
 
 ---
 
@@ -530,23 +661,20 @@ Drift Impact Visualization:
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  API Security                                                    │
-│  ├── API Key authentication                                     │
-│  ├── Rate limiting (100 req/min)                                │
-│  ├── Input validation (Pydantic)                                │
+│  ├── Input validation (Pydantic v2)                              │
 │  ├── CORS configuration                                         │
-│  └── HTTPS enforcement                                          │
+│  └── Structured error responses                                 │
 │                                                                  │
 │  Data Security                                                   │
 │  ├── No PII in logs                                             │
 │  ├── Anonymized customer IDs                                    │
-│  ├── Encrypted model artifacts                                  │
 │  └── Audit logging                                              │
 │                                                                  │
 │  Model Security                                                  │
-│  ├── Adversarial robustness testing                             │
 │  ├── Model versioning                                           │
 │  ├── A/B testing for updates                                    │
-│  └── Rollback capability                                        │
+│  ├── Rollback capability                                        │
+│  └── Adversarial robustness testing                             │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -557,22 +685,25 @@ Drift Impact Visualization:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    DEPLOYMENT (Docker)                            │
+│                    DEPLOYMENT (Local / Simple)                    │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Container: ai-risk-manager                              │   │
+│  │  Application: ai-risk-manager                            │   │
 │  │  ├── Port: 8000                                          │   │
-│  │  ├── Health: /health                                     │   │
-│  │  └── Metrics: /metrics                                   │   │
+│  │  ├── Health: /docs (OpenAPI/Swagger)                     │   │
+│  │  └── Run: uvicorn api.main:app --reload                  │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                              │                                   │
 │                              ▼                                   │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Volumes                                                │   │
-│  │  ├── /app/models/artifacts (model files)                │   │
-│  │  ├── /app/data (training data)                          │   │
-│  │  └── /app/logs (application logs)                       │   │
+│  │  Project Files                                           │   │
+│  │  ├── data/ (generation, schema, drift)                   │   │
+│  │  ├── models/ (pipeline, scorers, drift, trainer)         │   │
+│  │  ├── evaluation/ (metrics, cost, held-out, drift report) │   │
+│  │  ├── api/ (main, schemas, endpoints)                     │   │
+│  │  ├── tests/ (test_data, test_models, test_api)           │   │
+│  │  └── notebooks/ (exploration, training, drift)           │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -581,9 +712,9 @@ Drift Impact Visualization:
 ---
 
 This architecture ensures:
-1. **Scalability**: Stateless API, horizontal scaling
-2. **Reliability**: Health checks, graceful degradation
-3. **Observability**: Structured logging, metrics, tracing
-4. **Security**: Auth, rate limiting, input validation
-5. **Maintainability**: Clear separation of concerns
-6. **Testability**: Unit, integration, and API tests
+1. **Cost-Sensitivity**: Real RBI-aligned cost matrix drives all threshold decisions
+2. **Drift Resilience**: ADWIN + PSI + Page-Hinkley detection with adaptive retraining
+3. **Multi-Class Fraud Detection**: 4-class classification (genuine, friendly, takeover, technical)
+4. **Simplicity**: No heavy infrastructure (no Docker, K8s, PostgreSQL) — kept lightweight
+5. **Testability**: Unit, integration, and API tests across all layers
+6. **Reproducibility**: Deterministic data generation, fixed random seeds, versioned models

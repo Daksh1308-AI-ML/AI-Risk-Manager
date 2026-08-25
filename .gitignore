@@ -42,6 +42,12 @@ models/artifacts/*.joblib
 
 # Data files
 data/*.csv
+tests/*.csv
+
+# Generated reports
+evaluation/reports/*.png
+evaluation/reports/*.txt
+evaluation/reports/*.json
 
 # Logs
 *.log
